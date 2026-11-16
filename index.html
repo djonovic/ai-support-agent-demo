@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Support & Lead-Qualification Agent — Live Demo (RAG + booking + n8n handoff)</title>
+<meta name="description" content="Live demo of a RAG customer-support agent that answers from a knowledge base with citations, qualifies leads, books appointments and hands off to n8n. Fictional data. Built by Pasko Djonovic.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦷</text></svg>">
+</head><body>
+<div class="demo-banner">⚠️ DEMO with fictional data — “BrightSmile Dental Studio” is not a real clinic. No data leaves your browser; bookings are fake.</div>
+<header class="top">
+  <div class="brand"><div class="logo">🦷</div><div><h1>AI Support &amp; Lead-Qualification Agent</h1>
+  <p>RAG answers with sources · lead capture · booking · webhook / n8n handoff — running 100% in your browser</p></div></div>
+  <div class="hdr-r"><span class="pill">BM25 retrieval</span><span class="pill">0 API keys</span><span class="pill">n8n template</span></div>
+</header>
+<main class="grid">
+  <section class="card chatcard">
+    <div class="chathead"><div class="avatar">BS</div><div><b>BrightSmile Assistant</b><span class="online">● online · demo</span></div>
+      <button id="reset" class="ghost" title="Restart">↺ Restart</button></div>
+    <div id="chat" class="chat"></div>
+    <div class="chips">
+      <button class="chip">How much does teeth whitening cost?</button>
+      <button class="chip">Are you open on Saturday?</button>
+      <button class="chip">What is your cancellation policy?</button>
+      <button class="chip" data-q="Hi, I'm Ana Petrovic, I'd like to book an implant consultation">I'd like to book an implant consultation</button>
+      <button class="chip" data-q="My budget is around €1500 and I want to start next month">Budget €1500, start next month</button>
+    </div>
+    <form id="form" class="composer"><input id="msg" autocomplete="off" placeholder="Ask a question or say what you need…"><button type="submit">Send</button></form>
+  </section>
+  <section class="side">
+    <div class="card">
+      <h3>How it works</h3>
+      <ol class="pipe">
+        <li data-step="1"><b>Retrieve</b><span>BM25 search over <span id="kbcount"></span> clinic docs</span></li>
+        <li data-step="2"><b>Answer</b><span>grounded in retrieved passages, with doc IDs</span></li>
+        <li data-step="3"><b>Qualify</b><span>extract name · need · budget · timeline</span></li>
+        <li data-step="4"><b>Book</b><span>offer open slots, confirm</span></li>
+        <li data-step="5"><b>Hand off</b><span>webhook → n8n → Sheets / Calendar / email</span></li>
+      </ol>
+    </div>
+    <div class="card">
+      <div class="tabs"><button class="tab on" data-tab="sources">Sources</button><button class="tab" data-tab="lead">Lead card</button><button class="tab" data-tab="handoff">Webhook</button><button class="tab" data-tab="kb">Knowledge base</button></div>
+      <div id="pane-sources" class="pane on"><div class="muted small">Query terms: <span id="terms">—</span></div><div id="sources"><p class="muted">Ask something — the top-3 retrieved docs and their scores show here.</p></div></div>
+      <div id="pane-lead" class="pane"><div class="leadtop"><span id="leadcount"></span><span id="leadbadge" class="badge">—</span></div>
+        <div class="prog"><i id="leadprog"></i></div><pre id="leadjson" class="json"></pre></div>
+      <div id="pane-handoff" class="pane"><div id="webhookcard"><pre id="webhook" class="json">Waiting for a confirmed booking…
+When it happens, the payload that would be POSTed to an n8n Webhook node appears here.</pre></div>
+        <p class="small muted">Importable n8n template: <a href="n8n-workflow-template.json" download>n8n-workflow-template.json</a> (Webhook → retrieval → LLM → Google Sheets → Calendar booking).</p></div>
+      <div id="pane-kb" class="pane"><ul id="kblist" class="kblist"></ul></div>
+    </div>
+    <div class="card about"><b>Production version</b> swaps BM25 for embeddings (pgvector / Supabase), adds an LLM (OpenAI, Claude or a local model) on top of the same retrieved passages, and posts leads to n8n, Google Sheets, a CRM and a real calendar.
+      <div class="by">Built by <b>Pasko Djonovic</b> — full-stack React/Next.js &amp; AI automation developer · <a href="https://www.upwork.com/freelancers/paskodjonovic" target="_blank" rel="noopener">Upwork</a> · <a href="https://github.com/djonovic/ai-support-agent-demo" id="repolink" target="_blank" rel="noopener">source</a></div></div>
+  </section>
+</main>
+<script src="kb.js"></script><script src="rag.js"></script><script src="app.js"></script>
+</body></html>

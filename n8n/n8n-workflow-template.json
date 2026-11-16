@@ -1,0 +1,353 @@
+{
+  "name": "TEMPLATE - AI support + lead qualification + booking (BrightSmile demo, fictional)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dental-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "n1",
+      "name": "Webhook (chat message)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "dental-lead-demo"
+    },
+    {
+      "parameters": {
+        "jsCode": "// TEMPLATE: simple keyword retrieval over the clinic knowledge base.\n// In production replace with a vector store (Supabase pgvector / Pinecone) + embeddings.\nconst KB = [\n  {id:'KB-01', title:'Opening hours', text:'Open Mon-Fri 08:00-19:00, Sat 09:00-14:00, closed Sundays.'},\n  {id:'KB-04', title:'Teeth whitening', text:'In-clinic whitening €290 (90 min); take-home kit €190.'},\n  {id:'KB-05', title:'Dental implants', text:'Single implant incl. crown from €1,200; 3-6 months; free consultation.'},\n  {id:'KB-08', title:'Cancellation policy', text:'Free cancellation up to 24h before; late cancellation/no-show €25.'},\n  {id:'KB-09', title:'Payment & instalments', text:'Cash/cards; treatments over €500 in 3/6/12 interest-free instalments.'}\n];\nconst q = ($json.body?.message || '').toLowerCase();\nconst terms = q.split(/[^a-z0-9€]+/).filter(t => t.length > 2);\nconst scored = KB.map(d => ({...d, score: terms.filter(t => (d.title + ' ' + d.text).toLowerCase().includes(t)).length}))\n  .sort((a, b) => b.score - a.score).slice(0, 3).filter(d => d.score > 0);\nreturn [{ json: { ...$json.body, sources: scored, context: scored.map(d => `[${d.id}] ${d.title}: ${d.text}`).join('\\n') } }];"
+      },
+      "id": "n2",
+      "name": "Retrieve KB passages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are the support assistant of BrightSmile Dental Studio (FICTIONAL demo clinic). Answer ONLY from the context passages and cite their IDs like [KB-04]. If the answer is not in the context, say you don't know. Also extract lead fields from the conversation. Reply as JSON: {\"answer\": string, \"cited\": [ids], \"lead\": {\"name\",\"email\",\"need\",\"budget\",\"timeline\"}}.",
+              "role": "system"
+            },
+            {
+              "content": "=Context:\n{{ $json.context }}\n\nKnown lead so far: {{ JSON.stringify($json.lead || {}) }}\n\nUser message: {{ $json.message }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "n3",
+      "name": "LLM: grounded answer + lead extraction",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_ME",
+          "name": "OpenAI account (add your own)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// TEMPLATE: parse the LLM's JSON output into answer + lead fields.\nconst raw = $json.message?.content ?? $json.text ?? $json.output ?? '{}';\nlet out; try { out = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { out = { answer: String(raw), lead: {} }; }\nconst prev = $('Retrieve KB passages').first().json;\nconst lead = { session_id: prev.session_id || null, ...(prev.lead || {}), ...(out.lead || {}) };\nconst qualified = !!(lead.name && lead.need && lead.budget && lead.timeline);\nreturn [{ json: { answer: out.answer, cited: out.cited || prev.sources.map(s => s.id), lead, qualified, booking_slot: prev.booking_slot || null } }];"
+      },
+      "id": "n4",
+      "name": "Parse answer + lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.qualified }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n5",
+      "name": "Lead qualified?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "name": "={{ $json.lead.name }}",
+            "email": "={{ $json.lead.email }}",
+            "need": "={{ $json.lead.need }}",
+            "budget": "={{ $json.lead.budget }}",
+            "timeline": "={{ $json.lead.timeline }}",
+            "source": "website-chat"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "n6",
+      "name": "Google Sheets: append lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        200
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Sheets account (add your own)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $('Parse answer + lead').item.json.booking_slot }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n7",
+      "name": "Slot chosen?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "REPLACE_WITH_CALENDAR_ID",
+          "mode": "id"
+        },
+        "start": "={{ $('Parse answer + lead').item.json.booking_slot }}",
+        "end": "={{ DateTime.fromISO($('Parse answer + lead').item.json.booking_slot).plus({minutes:30}).toISO() }}",
+        "additionalFields": {
+          "summary": "={{ 'Consultation: ' + $('Parse answer + lead').item.json.lead.need + ' - ' + $('Parse answer + lead').item.json.lead.name }}"
+        }
+      },
+      "id": "n8",
+      "name": "Google Calendar: book slot",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1540,
+        120
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Calendar account (add your own)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { answer: $('Parse answer + lead').item.json.answer, cited: $('Parse answer + lead').item.json.cited, lead: $('Parse answer + lead').item.json.lead, qualified: $('Parse answer + lead').item.json.qualified } }}",
+        "options": {}
+      },
+      "id": "n9",
+      "name": "Respond to chat widget",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (chat message)": {
+      "main": [
+        [
+          {
+            "node": "Retrieve KB passages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve KB passages": {
+      "main": [
+        [
+          {
+            "node": "LLM: grounded answer + lead extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM: grounded answer + lead extraction": {
+      "main": [
+        [
+          {
+            "node": "Parse answer + lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse answer + lead": {
+      "main": [
+        [
+          {
+            "node": "Lead qualified?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead qualified?": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: append lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to chat widget",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: append lead": {
+      "main": [
+        [
+          {
+            "node": "Slot chosen?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slot chosen?": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar: book slot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to chat widget",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar: book slot": {
+      "main": [
+        [
+          {
+            "node": "Respond to chat widget",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "pinData": {},
+  "tags": [],
+  "_comment": "TEMPLATE ONLY. Fictional demo data. Add your own OpenAI, Google Sheets and Google Calendar credentials and IDs (REPLACE_ME placeholders) before activating."
+}
