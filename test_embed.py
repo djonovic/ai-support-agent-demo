@@ -7,9 +7,12 @@ with sync_playwright() as p:
     errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto(base + "embed-demo.html", wait_until="networkidle")
     pg.click(".bsw-btn"); f = pg.frame_locator(".bsw-frame")
+    f.locator(".m.bot").first.wait_for()  # iframe loaded and greeted
     def ask(q):
-        f.locator("#i").fill(q); f.locator("#i").press("Enter"); pg.wait_for_timeout(700)
-        return f.locator(".m.bot").last.inner_text()
+        n = f.locator(".m.bot:not(.typing)").count()
+        f.locator("#i").fill(q); f.locator("#i").press("Enter")
+        f.locator(".m.bot:not(.typing)").nth(n).wait_for()
+        return f.locator(".m.bot:not(.typing)").last.inner_text()
     a = ask("How much does teeth whitening cost?"); assert "€290" in a and "KB-04" in a, a
     a = ask("Can you repair my car engine?"); assert "won't guess" in a, a
     ask("Book a visit"); ask("Ana Petrovic"); a = ask("ana@example.com"); assert "Request noted" in a, a
