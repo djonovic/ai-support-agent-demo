@@ -54,10 +54,10 @@ form button{background:var(--c);color:#fff;border:0;border-radius:10px;padding:0
       lead.email = m[0]; stage=null;
       return reply("Done ✅ Request noted for <b>"+esc(lead.name)+"</b> ("+esc(lead.email)+").<br><span style='color:#64748b'>Demo only: nothing is sent. In production this posts to your CRM, n8n or email.</span>");
     }
-    if (/\b(book|appointment|reserve|schedule|visit)\b/.test(t) && !/\?$/.test(t.trim())){ stage="name"; return reply("Happy to help you book. What's your name?"); }
+    if ((/\b(book|booking)\b/.test(t) || /\b(appointment|reserve|schedule)\b/.test(t) && !/\?\s*$/.test(t)) && !/\b(cancel|cancellation|reschedul)/.test(t)){ stage="name"; return reply("Happy to help you book. What's your name?"); }
     var r = window.RAG.search(q, 3), parts = window.RAG.compose(q, r.hits);
     if (!parts) return reply("I couldn't find that in the clinic's docs, so I won't guess. Try asking about prices, hours, treatments or policies, or type <b>book a visit</b>.");
-    var html = parts.map(function(x){return esc(x.text);}).join(" ");
+    var html = (parts.missing && parts.missing.length ? "I couldn't find “"+esc(parts.missing.join(", "))+"” in the clinic's docs, so I can't confirm that. Here is what the docs say: " : "") + parts.map(function(x){return esc(x.text);}).join(" ");
     var src = parts.map(function(x){ var d=window.KB.find(function(k){return k.id===x.id;}); return "<span>"+x.id+" · "+esc(d?d.title:"")+"</span>"; }).join("");
     reply(html + '<div class="src">'+src+'</div>');
   }

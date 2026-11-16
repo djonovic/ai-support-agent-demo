@@ -14,7 +14,11 @@ with sync_playwright() as p:
         f.locator(".m.bot:not(.typing)").nth(n).wait_for()
         return f.locator(".m.bot:not(.typing)").last.inner_text()
     a = ask("How much does teeth whitening cost?"); assert "€290" in a and "KB-04" in a, a
-    a = ask("Can you repair my car engine?"); assert "won't guess" in a, a
+    assert "your name" not in a.lower()
+    for q in ["Can you repair my car engine?", "What's the capital of Australia?", "What's the weather tomorrow?", "Who is the president of France?"]:
+        a = ask(q); assert "won't guess" in a and "KB-" not in a, (q, a)
+    a = ask("Are you open on Saturday?"); assert "KB-01" in a, a
+    a = ask("Can I pay with Bitcoin?"); assert "couldn't find" in a, a
     ask("Book a visit"); ask("Ana Petrovic"); a = ask("ana@example.com"); assert "Request noted" in a, a
     f.locator("#x").click(); pg.wait_for_timeout(300)
     assert "open" not in pg.get_attribute(".bsw-frame", "class")

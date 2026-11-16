@@ -4,6 +4,7 @@ const chat = $("#chat"), input = $("#msg");
 const lead = {name:null, email:null, need:null, budget:null, timeline:null, source:"website-chat", score:null, status:"collecting", booking:null};
 let awaiting = null;          // which lead field the agent just asked for
 let booked = false, slotsShown = false, lastAsked = null;
+let bookingMode = false, offeredBook = false; // only qualify (name, budget, timeline) once the user wants to book
 const NEEDS = [
   ["implant",/implant|missing tooth/], ["clear aligners",/invisalign|aligner|braces|straighten|crooked/],
   ["teeth whitening",/whiten|whitening|white teeth|stain/], ["emergency visit",/emergency|pain|toothache|broken|chipped|swell/],
@@ -51,6 +52,7 @@ function extract(t, raw){
   else if (awaiting==="name" && /^[a-zà-ž]+(\s+[a-zà-ž]+)?$/i.test(raw.trim()) && raw.trim().length<30) { lead.name = cap(raw.trim()); got.push("name"); }
   m = raw.match(/[\w.+-]+@[\w-]+\.[\w.]+/); if (m){ lead.email = m[0]; got.push("email"); }
   for (const [n,re] of NEEDS){ if (re.test(t)){ if(lead.need!==n){lead.need=n; got.push("need");} break; } }
+  if (bookingMode || awaiting) {
   m = raw.match(/(?:€|eur|euro|\$|usd)\s?(\d[\d,.]*k?)|(\d[\d,.]*k?)\s?(?:€|eur|euros?|\$|usd|dollars)/i)
       || (awaiting==="budget" || /budget/i.test(t) ? raw.match(/(\d[\d,.]*k?)/i) : null);
   if (m){ let v=(m[1]||m[2]).toLowerCase().replace(/,/g,""); let amt = v.endsWith("k")?parseFloat(v)*1000:parseFloat(v);
@@ -58,6 +60,7 @@ function extract(t, raw){
   else if (awaiting==="budget" && /flexible|not sure|no idea|depends/i.test(t)){ lead.budget={amount:0,currency:"EUR",note:"flexible"}; got.push("budget"); }
   m = t.match(/\b(asap|as soon as possible|today|tomorrow|this week|next week|this month|next month|in \d+ (?:days?|weeks?|months?)|within \d+ (?:days?|weeks?|months?)|urgent(?:ly)?|no rush|this year|january|february|march|april|may|june|july|august|september|october|november|december)\b/);
   if (m){ lead.timeline = m[1]; got.push("timeline"); }
+  }
   return got;
 }
 function cap(s){return s.split(" ").map(w=>w[0].toUpperCase()+w.slice(1).toLowerCase()).join(" ");}
@@ -111,14 +114,16 @@ function turn(raw){
   const t = raw.toLowerCase();
   step(1);
   const r = RAG.search(raw, 3); renderSources(r);
+  const wantsBook = (/\b(book|booking)\b/.test(t) || /\b(appointment|schedule|slot|reserve|come in)\b/.test(t) && !/\?\s*$/.test(t)) && !/\b(cancel|cancellation|reschedul)/.test(t) || /\b(budget|start)\b/.test(t) && bookingMode;
+  if (wantsBook) bookingMode = true;
   const got = extract(t, raw); renderLead();
-  const wantsBook = /\b(book|appointment|schedule|slot|reserve|come in|visit)\b/.test(t);
   const isQuestion = /\?|^(what|how|when|where|do|does|can|is|are|which|who|why)\b|price|cost|how much|open|policy|insurance|pay/.test(t);
   setTimeout(()=>{
     step(2);
     let html = "";
     const parts = isQuestion || (!got.length && !wantsBook) ? RAG.compose(raw, r.hits) : null;
     if (parts){
+      if (parts.missing && parts.missing.length) html += `I couldn't find “${esc(parts.missing.join(", "))}” in the clinic's docs, so I can't confirm that. Here is what the docs say:<br>`;
       html += parts.map(p=>`${esc(p.text)} <span class="cite" data-id="${p.id}">${p.id}</span>`).join("<br>");
     } else if (isQuestion){
       html += `I couldn't find that in the clinic's knowledge base, so I won't guess. I've noted your question for the front desk.`;
@@ -129,6 +134,11 @@ function turn(raw){
     }
     step(3);
     if (booked){ html += (html?"<br><br>":"") + "Anything else I can help with?"; add("bot",html); bindCites(); return; }
+    if (!bookingMode){
+      if (!html) html = "I can answer questions about prices, treatments, opening hours and policies from the clinic's docs, or book a visit.";
+      if (!offeredBook && parts){ html += "<br><br><span class=\"muted\">Want to book? Just say “book”.</span>"; offeredBook = true; }
+      add("bot", html); bindCites(); return;
+    }
     const miss = nextMissing();
     if (!miss){ if(html) {add("bot",html); bindCites();} if(!slotsShown) offerSlots(); return; }
     if (isQuestion && !got.length && !wantsBook && lastAsked===miss){

@@ -21,6 +21,11 @@ async def run():
         assert "KB-01" in res["Are you open on Saturday?"]
         assert "KB-08" in res["What is your cancellation policy?"]
         assert "won't guess" in res["Do you do hair transplants?"]
+        assert "your name" not in res["How much does teeth whitening cost?"], "must not ask for a name before booking intent"
+        for q in ["What's the capital of Australia?","What's the weather tomorrow?","Who is the president of France?"]:
+            a = await say(q); print("Q:",q,"\nA:",a,"\n"); assert "won't guess" in a and "KB-" not in a, (q, a)
+        a = await say("Can I pay with Bitcoin?"); print("Q: bitcoin\nA:",a); assert "couldn't find" in a, a
+        lead0 = json.loads(await pg.inner_text("#leadjson")); assert not lead0["timeline"], lead0
         for t in ["Hi, I'm Ana Petrovic, I'd like to book an implant consultation","My budget is around €1500","next month"]:
             print("U:",t,"\nA:", await say(t), "\n")
         lead = json.loads(await pg.inner_text("#leadjson"))
