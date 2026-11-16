@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chat widget (demo)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--c:#0ea5a4}
+html,body{height:100%}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#0f172a;background:#fff;display:flex;flex-direction:column}
+.hd{background:var(--c);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px}
+.av{width:36px;height:36px;border-radius:50%;background:#ffffff33;display:grid;place-items:center;font-weight:700}
+.hd b{display:block;font-size:15px}.hd small{opacity:.9;font-size:12px}
+.hd button{margin-left:auto;background:#ffffff26;border:0;color:#fff;border-radius:8px;width:30px;height:30px;font-size:18px;cursor:pointer}
+.note{background:#fef3c7;color:#78350f;font-size:11.5px;padding:6px 14px;border-bottom:1px solid #fde68a}
+#log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:#f8fafc}
+.m{max-width:86%;padding:9px 12px;border-radius:14px;white-space:normal;word-wrap:break-word}
+.bot{background:#fff;border:1px solid #e2e8f0;border-bottom-left-radius:4px;align-self:flex-start}
+.me{background:var(--c);color:#fff;border-bottom-right-radius:4px;align-self:flex-end}
+.src{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.src span{font-size:11px;background:#f1f5f9;border:1px solid #e2e8f0;color:#334155;border-radius:999px;padding:2px 8px}
+.typing{color:#64748b;font-style:italic}
+.qr{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px 0;background:#f8fafc}
+.qr button{font:12.5px system-ui,sans-serif;border:1px solid var(--c);color:var(--c);background:#fff;border-radius:999px;padding:5px 10px;cursor:pointer}
+form{display:flex;gap:8px;padding:10px 12px 12px;background:#f8fafc;border-top:1px solid #e2e8f0}
+input{flex:1;border:1px solid #cbd5e1;border-radius:10px;padding:10px 12px;font:14px system-ui,sans-serif;outline-color:var(--c)}
+form button{background:var(--c);color:#fff;border:0;border-radius:10px;padding:0 14px;font-weight:600;cursor:pointer}
+.ft{font-size:10.5px;color:#94a3b8;text-align:center;padding:0 0 8px;background:#f8fafc}
+.ft a{color:#64748b}
+</style></head><body>
+<div class="hd"><div class="av">BS</div><div><b id="t">BrightSmile Assistant</b><small>Answers from the clinic's own docs</small></div><button id="x" aria-label="Close">×</button></div>
+<div class="note">Demo · fictional clinic · answers come from a local knowledge base (no AI API, nothing is sent)</div>
+<div id="log" aria-live="polite"></div>
+<div class="qr" id="qr">
+  <button>Teeth whitening price?</button><button>Open on Saturday?</button><button>Cancellation policy</button><button>Book a visit</button>
+</div>
+<form id="f"><input id="i" autocomplete="off" placeholder="Type your question…" aria-label="Message"><button>Send</button></form>
+<div class="ft">Demo widget by <a href="https://djonovic.github.io/ai-support-agent-demo/" target="_blank" rel="noopener">Pasko Djonovic</a></div>
+<script src="kb.js"></script><script src="rag.js"></script>
+<script>
+(function(){
+  var p = new URLSearchParams(location.search);
+  var c = p.get("color"); if (/^#[0-9a-f]{3,8}$/i.test(c||"")) document.documentElement.style.setProperty("--c", c);
+  if (p.get("title")) document.getElementById("t").textContent = p.get("title");
+  var log = document.getElementById("log"), inp = document.getElementById("i");
+  var stage = null, lead = {};
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+  function add(cls, html){ var d=document.createElement("div"); d.className="m "+cls; d.innerHTML=html; log.appendChild(d); log.scrollTop=log.scrollHeight; return d; }
+  function reply(html){ var t=add("bot typing","typing…"); setTimeout(function(){ t.className="m bot"; t.innerHTML=html; log.scrollTop=log.scrollHeight; }, 350); }
+  function answer(q){
+    var t = q.toLowerCase();
+    if (stage === "name"){ lead.name = q.trim().slice(0,40); stage="email"; return reply("Thanks, "+esc(lead.name)+". What email should the clinic use to confirm?"); }
+    if (stage === "email"){
+      var m = q.match(/[\w.+-]+@[\w-]+\.[\w.]+/); if(!m) return reply("That doesn't look like an email. Could you check it?");
+      lead.email = m[0]; stage=null;
+      return reply("Done ✅ Request noted for <b>"+esc(lead.name)+"</b> ("+esc(lead.email)+").<br><span style='color:#64748b'>Demo only: nothing is sent. In production this posts to your CRM, n8n or email.</span>");
+    }
+    if (/\b(book|appointment|reserve|schedule|visit)\b/.test(t) && !/\?$/.test(t.trim())){ stage="name"; return reply("Happy to help you book. What's your name?"); }
+    var r = window.RAG.search(q, 3), parts = window.RAG.compose(q, r.hits);
+    if (!parts) return reply("I couldn't find that in the clinic's docs, so I won't guess. Try asking about prices, hours, treatments or policies, or type <b>book a visit</b>.");
+    var html = parts.map(function(x){return esc(x.text);}).join(" ");
+    var src = parts.map(function(x){ var d=window.KB.find(function(k){return k.id===x.id;}); return "<span>"+x.id+" · "+esc(d?d.title:"")+"</span>"; }).join("");
+    reply(html + '<div class="src">'+src+'</div>');
+  }
+  function send(v){ v=(v||"").trim(); if(!v) return; add("me", esc(v)); answer(v); }
+  document.getElementById("f").onsubmit=function(e){e.preventDefault(); var v=inp.value; inp.value=""; send(v);};
+  document.querySelectorAll("#qr button").forEach(function(b){ b.onclick=function(){ send(b.textContent); }; });
+  document.getElementById("x").onclick=function(){ parent.postMessage("bsw:close","*"); };
+  add("bot", esc(p.get("greeting") || "Hi! 👋 I answer questions about BrightSmile Dental Studio (a fictional clinic) using its own docs, and I can take a booking request."));
+  window.__send = send;
+})();
+</script>
+</body></html>

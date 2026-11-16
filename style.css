@@ -52,3 +52,5 @@ h3{margin:0 0 10px;font-size:15px}
 .flash .json{animation:fl 1.2s}@keyframes fl{0%{border-color:#5eead4;box-shadow:0 0 0 3px #14b8a660}100%{}}
 .kblist{list-style:none;padding:0;margin:0;columns:2;font-size:12.5px}.kblist li{padding:3px 0;break-inside:avoid}
 .about{font-size:13px;color:#b6c4d8}.by{margin-top:8px;padding-top:8px;border-top:1px solid #22334d;color:#8ea2bf}
+
+.embedcard h3{margin-bottom:8px}.embedcard pre.embed{white-space:pre-wrap;word-break:break-all;font-size:12px;margin-bottom:8px}.embedcard a{color:#5eead4}
